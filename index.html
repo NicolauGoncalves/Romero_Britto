@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filtro Pop Art ao Vivo - Tela Cheia</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #111;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .container {
+            background: #222;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            max-width: 550px;
+            width: 100%;
+            position: relative;
+        }
+        
+        /* Container do vídeo/canvas com suporte para Fullscreen */
+        .viewer-box {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border: 4px solid #ff0055;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        video { display: none; }
+        
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Setas discretas flutuantes nas laterais */
+        .arrow-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            font-size: 24px;
+            padding: 15px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+            z-index: 10;
+        }
+        .arrow-btn:hover {
+            background: rgba(255, 0, 85, 0.8);
+        }
+        .arrow-left { left: 10px; }
+        .arrow-right { right: 10px; }
+
+        /* Botão de Tela Cheia discreto */
+        .fullscreen-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 10;
+            transition: background 0.2s;
+        }
+        .fullscreen-btn:hover {
+            background: rgba(255, 0, 85, 0.8);
+        }
+
+        .controls {
+            margin-top: 15px;
+        }
+        .info-bar {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        label {
+            font-size: 14px;
+            display: block;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: #ff0055;
+        }
+        #imgIndicator {
+            font-weight: bold;
+            color: #ffdd00;
+        }
+
+        /* Estilo quando estiver em modo Tela Cheia */
+        .viewer-box:fullscreen {
+            border: none;
+            border-radius: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+        .viewer-box:-webkit-full-screen {
+            border: none;
+            border-radius: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="mainContainer">
+        <h2>Filtro Pop Art ao Vivo 🎨</h2>
+        
+        <div class="info-bar">
+            Fundo atual: <span id="imgIndicator">imagem1.jpg</span>
+        </div>
+
+        <!-- Área visualizadora com as setas e o botão de fullscreen embutidos -->
+        <div class="viewer-box" id="viewerBox">
+            <button class="arrow-btn arrow-left" onclick="mudarImagem(-1)">◀</button>
+            <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Tela Cheia">⛶</button>
+            <canvas id="canvas"></canvas>
+            <button class="arrow-btn arrow-right" onclick="mudarImagem(1)">▶</button>
+        </div>
+
+        <video id="webcam" autoplay playsinline></video>
+
+        <div class="controls">
+            <label for="transparencyRange">Visibilidade do Rosto (<span id="valorTransparencia">80</span>%):</label>
+            <input type="range" id="transparencyRange" min="0" max="100" step="1" value="80">
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const transparencyRange = document.getElementById('transparencyRange');
+        const valorTransparencia = document.getElementById('valorTransparencia');
+        const imgIndicator = document.getElementById('imgIndicator');
+        const viewerBox = document.getElementById('viewerBox');
+
+        let indiceAtual = 1;
+        const totalImagens = 10;
+        let imagemAtual = new Image();
+
+        function carregarImagemAtual() {
+            const nomeArquivo = `imagem${indiceAtual}.jpg`;
+            imgIndicator.innerText = nomeArquivo;
+            imagemAtual.src = nomeArquivo;
+        }
+
+        function mudarImagem(direcao) {
+            indiceAtual += direcao;
+            if (indiceAtual > totalImagens) {
+                indiceAtual = 1;
+            } else if (indiceAtual < 1) {
+                indiceAtual = totalImagens;
+            }
+            carregarImagemAtual();
+        }
+
+        carregarImagemAtual();
+
+        // Função para ativar/desativar a tela cheia
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                if (viewerBox.requestFullscreen) {
+                    viewerBox.requestFullscreen();
+                } else if (viewerBox.webkitRequestFullscreen) {
+                    viewerBox.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+
+        transparencyRange.addEventListener('input', function() {
+            valorTransparencia.innerText = this.value;
+        });
+
+        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+            .then(stream => {
+                video.srcObject = stream;
+                video.play();
+                requestAnimationFrame(processarQuadro);
+            })
+            .catch(err => {
+                alert("Erro ao acessar a câmera: " + err);
+            });
+
+        function processarQuadro() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+
+                // Desenha a imagem de fundo artística
+                if (imagemAtual.complete && imagemAtual.naturalWidth !== 0) {
+                    ctx.drawImage(imagemAtual, 0, 0, canvas.width, canvas.height);
+                } else {
+                    ctx.fillStyle = "#ffdd00";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+
+                // Controla a opacidade e nitidez do rosto
+                let transparencia = parseInt(transparencyRange.value) / 100;
+                ctx.globalAlpha = transparencia; 
+                ctx.globalCompositeOperation = 'source-over'; 
+
+                // Desenha a webcam por cima
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                ctx.globalAlpha = 1.0;
+            }
+
+            requestAnimationFrame(processarQuadro);
+        }
+    </script>
+
+</body>
+</html>
