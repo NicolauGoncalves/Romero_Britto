@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Filtro Pop Art ao Vivo - Tela Cheia</title>
+    <title>Filtro Pop Art - IA Sem Fundo</title>
+    
+    <!-- Bibliotecas da IA (MediaPipe) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -23,12 +28,10 @@
             padding: 20px;
             border-radius: 16px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            max-width: 550px;
+            max-width: 600px;
             width: 100%;
-            position: relative;
         }
         
-        /* Container do vídeo/canvas com suporte para Fullscreen */
         .viewer-box {
             position: relative;
             width: 100%;
@@ -37,19 +40,51 @@
             border-radius: 8px;
             overflow: hidden;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
+            min-height: 300px;
         }
+
+        .viewer-box:fullscreen { border: none; border-radius: 0; width: 100vw; height: 100vh; }
+        .viewer-box:-webkit-full-screen { border: none; border-radius: 0; width: 100vw; height: 100vh; }
 
         video { display: none; }
-        
-        canvas {
-            width: 100%;
-            height: auto;
-            display: block;
+        canvas { width: 100%; height: auto; display: block; }
+
+        /* Indicador de Carregamento da IA */
+        #loading {
+            position: absolute;
+            color: #ffdd00;
+            font-weight: bold;
+            font-size: 18px;
+            z-index: 20;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 8px;
         }
 
-        /* Setas discretas flutuantes nas laterais */
+        .top-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+        .action-btn {
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .action-btn:hover { background: rgba(255, 0, 85, 0.9); }
+
         .arrow-btn {
             position: absolute;
             top: 50%;
@@ -61,96 +96,70 @@
             padding: 15px 10px;
             cursor: pointer;
             border-radius: 4px;
-            transition: background 0.2s;
             z-index: 10;
         }
-        .arrow-btn:hover {
-            background: rgba(255, 0, 85, 0.8);
-        }
+        .arrow-btn:hover { background: rgba(255, 0, 85, 0.9); }
         .arrow-left { left: 10px; }
         .arrow-right { right: 10px; }
 
-        /* Botão de Tela Cheia discreto */
-        .fullscreen-btn {
+        .bottom-controls {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.6);
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            box-sizing: border-box;
             z-index: 10;
-            transition: background 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
-        .fullscreen-btn:hover {
-            background: rgba(255, 0, 85, 0.8);
-        }
-
-        .controls {
-            margin-top: 15px;
-        }
-        .info-bar {
-            margin-bottom: 10px;
+        .bottom-controls label {
             font-size: 14px;
-            color: #aaa;
-        }
-        label {
-            font-size: 14px;
-            display: block;
-            margin-top: 10px;
             margin-bottom: 5px;
-            color: #aaa;
+            color: #ddd;
         }
         input[type="range"] {
-            width: 100%;
+            width: 90%;
             accent-color: #ff0055;
         }
-        #imgIndicator {
-            font-weight: bold;
-            color: #ffdd00;
-        }
 
-        /* Estilo quando estiver em modo Tela Cheia */
-        .viewer-box:fullscreen {
-            border: none;
-            border-radius: 0;
-            width: 100vw;
-            height: 100vh;
-        }
-        .viewer-box:-webkit-full-screen {
-            border: none;
-            border-radius: 0;
-            width: 100vw;
-            height: 100vh;
-        }
+        .info-bar { margin-bottom: 15px; font-size: 14px; color: #aaa; }
+        #imgIndicator { font-weight: bold; color: #ffdd00; }
     </style>
 </head>
 <body>
 
-    <div class="container" id="mainContainer">
-        <h2> Turma Kids - Teacher Bruna 🎨</h2>
+    <div class="container">
+        <h2>Filtro Pop Art IA 🎨</h2>
         
         <div class="info-bar">
             Fundo atual: <span id="imgIndicator">imagem1.jpg</span>
         </div>
 
-        <!-- Área visualizadora com as setas e o botão de fullscreen embutidos -->
         <div class="viewer-box" id="viewerBox">
+            
+            <div id="loading">Carregando IA de recorte... aguarde.</div>
+
+            <div class="top-controls">
+                <button class="action-btn" onclick="inverterOrdem()" title="Trocar quem fica na frente">🔄 Inverter</button>
+                <button class="action-btn" onclick="tirarFoto()" title="Salvar Imagem">📸 Capturar</button>
+                <button class="action-btn" onclick="toggleFullscreen()" title="Tela Cheia">⛶</button>
+            </div>
+
             <button class="arrow-btn arrow-left" onclick="mudarImagem(-1)">◀</button>
-            <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Tela Cheia">⛶</button>
             <canvas id="canvas"></canvas>
             <button class="arrow-btn arrow-right" onclick="mudarImagem(1)">▶</button>
+
+            <div class="bottom-controls">
+                <label for="transparencyRange">Transparência da Camada Superior (<span id="valorTransparencia">90</span>%):</label>
+                <input type="range" id="transparencyRange" min="0" max="100" step="1" value="90">
+            </div>
+
         </div>
 
         <video id="webcam" autoplay playsinline></video>
-
-        <div class="controls">
-            <label for="transparencyRange">Visibilidade do Rosto (<span id="valorTransparencia">80</span>%):</label>
-            <input type="range" id="transparencyRange" min="0" max="100" step="1" value="80">
-        </div>
     </div>
 
     <script>
@@ -161,10 +170,16 @@
         const valorTransparencia = document.getElementById('valorTransparencia');
         const imgIndicator = document.getElementById('imgIndicator');
         const viewerBox = document.getElementById('viewerBox');
+        const loading = document.getElementById('loading');
+
+        // Canvas oculto usado apenas para o recorte da máscara da IA
+        const offCanvas = document.createElement('canvas');
+        const offCtx = offCanvas.getContext('2d');
 
         let indiceAtual = 1;
         const totalImagens = 10;
         let imagemAtual = new Image();
+        let pessoaNaFrente = true; 
 
         function carregarImagemAtual() {
             const nomeArquivo = `imagem${indiceAtual}.jpg`;
@@ -174,72 +189,103 @@
 
         function mudarImagem(direcao) {
             indiceAtual += direcao;
-            if (indiceAtual > totalImagens) {
-                indiceAtual = 1;
-            } else if (indiceAtual < 1) {
-                indiceAtual = totalImagens;
-            }
+            if (indiceAtual > totalImagens) indiceAtual = 1;
+            else if (indiceAtual < 1) indiceAtual = totalImagens;
             carregarImagemAtual();
         }
 
-        carregarImagemAtual();
+        function inverterOrdem() { pessoaNaFrente = !pessoaNaFrente; }
 
-        // Função para ativar/desativar a tela cheia
+        function tirarFoto() {
+            const link = document.createElement('a');
+            link.download = `Arte_Britto_${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png', 1.0);
+            link.click();
+        }
+
         function toggleFullscreen() {
             if (!document.fullscreenElement) {
-                if (viewerBox.requestFullscreen) {
-                    viewerBox.requestFullscreen();
-                } else if (viewerBox.webkitRequestFullscreen) {
-                    viewerBox.webkitRequestFullscreen();
-                }
+                if (viewerBox.requestFullscreen) viewerBox.requestFullscreen();
+                else if (viewerBox.webkitRequestFullscreen) viewerBox.webkitRequestFullscreen();
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                }
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
             }
         }
+
+        carregarImagemAtual();
 
         transparencyRange.addEventListener('input', function() {
             valorTransparencia.innerText = this.value;
         });
 
-        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
-            .then(stream => {
-                video.srcObject = stream;
-                video.play();
-                requestAnimationFrame(processarQuadro);
-            })
-            .catch(err => {
-                alert("Erro ao acessar a câmera: " + err);
-            });
+        // Configuração da IA de Segmentação (MediaPipe)
+        const selfieSegmentation = new SelfieSegmentation({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+        }});
+        selfieSegmentation.setOptions({ modelSelection: 1 }); // Otimizado para computadores/câmeras amplas
+        
+        selfieSegmentation.onResults(onResults);
 
-        function processarQuadro() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth || 640;
-                canvas.height = video.videoHeight || 480;
+        // Inicializa a câmera e envia os quadros para a IA
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await selfieSegmentation.send({image: video});
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start();
 
-                // Desenha a imagem de fundo artística
+        // Função que processa o resultado do recorte
+        function onResults(results) {
+            loading.style.display = 'none'; // Some com o aviso de carregamento
+
+            canvas.width = results.image.width;
+            canvas.height = results.image.height;
+            offCanvas.width = results.image.width;
+            offCanvas.height = results.image.height;
+
+            // 1. Prepara a pessoa sem fundo no canvas oculto
+            offCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+            // Desenha a máscara (silhueta)
+            offCtx.globalCompositeOperation = 'source-over';
+            offCtx.drawImage(results.segmentationMask, 0, 0, offCanvas.width, offCanvas.height);
+            // Preenche a silhueta com a imagem real da webcam
+            offCtx.globalCompositeOperation = 'source-in';
+            offCtx.drawImage(results.image, 0, 0, offCanvas.width, offCanvas.height);
+
+            let transparencia = parseInt(transparencyRange.value) / 100;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (pessoaNaFrente) {
+                // Desenha a obra de arte no fundo
                 if (imagemAtual.complete && imagemAtual.naturalWidth !== 0) {
                     ctx.drawImage(imagemAtual, 0, 0, canvas.width, canvas.height);
                 } else {
                     ctx.fillStyle = "#ffdd00";
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
-
-                // Controla a opacidade e nitidez do rosto
-                let transparencia = parseInt(transparencyRange.value) / 100;
+                
+                // Desenha a pessoa sem fundo por cima
                 ctx.globalAlpha = transparencia; 
                 ctx.globalCompositeOperation = 'source-over'; 
+                ctx.drawImage(offCanvas, 0, 0, canvas.width, canvas.height);
 
-                // Desenha a webcam por cima
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
+            } else {
+                // Desenha a pessoa sem fundo primeiro
                 ctx.globalAlpha = 1.0;
+                ctx.globalCompositeOperation = 'source-over'; 
+                ctx.drawImage(offCanvas, 0, 0, canvas.width, canvas.height);
+                
+                // Desenha a arte por cima
+                ctx.globalAlpha = transparencia; 
+                if (imagemAtual.complete && imagemAtual.naturalWidth !== 0) {
+                    ctx.drawImage(imagemAtual, 0, 0, canvas.width, canvas.height);
+                }
             }
 
-            requestAnimationFrame(processarQuadro);
+            ctx.globalAlpha = 1.0;
         }
     </script>
 
